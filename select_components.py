@@ -73,6 +73,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pushButton_plot.clicked.connect(self.plot_transmission)
         self.pushButton_clearTable.clicked.connect(self.clear_table)
         self.pushButton_save.clicked.connect(self.save)
+        self.pushButton_load.clicked.connect(self.load)
         
     def change_refs(self):
         filename=data_dictionary[self.comboBox_refs.currentText()]
@@ -109,7 +110,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget_components.setRowCount(0)
     
     def save(self):         
-         filename,extension = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Transmission', os.getcwd()+'/results/Transmission.h5', '.h5')
+         filename,extension = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Transmission', os.getcwd()+'/results/Transmission.h5', '*.h5')
          tableWidget=self.tableWidget_components
          numrows=tableWidget.rowCount()
          parameters=[[tableWidget.item(i,j).text() for j in range(3)] for i in range(numrows)]
@@ -119,6 +120,20 @@ class MainWindow(QtWidgets.QMainWindow):
          x_transmission,transmission=calculate_transmission(tableWidget,np.float(self.lineEdit_ResolutionGraph.text()))
          f.create_dataset("Transmission", data=np.vstack((x_transmission,transmission)).T)
          f.close()
+         
+    def load(self):         
+         tableWidget=self.tableWidget_components
+         filename,extension = QtWidgets.QFileDialog.getOpenFileName(self, 'Load Transmission', os.getcwd()+'/results/', '*.h5')
+         f=h5.File(filename,'r')
+         parameters=f['Components']
+         numrows=parameters.shape[0]
+         tableWidget.setRowCount(numrows)
+         for i in range(numrows):
+             for j in range(3):
+                 tableWidget.setItem(i,j,QtWidgets.QTableWidgetItem(parameters[i,j].decode('utf-8')))
+         f.close()
+         
+         
              
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
