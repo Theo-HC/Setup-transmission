@@ -53,7 +53,7 @@ def calculate_transmission(tableWidget,ResolutionGraph):
                 max_wl=max_temp
                 
             transmission_interpolations+=[interp]
-    x_transmission=np.arange(min_wl,max_wl+ResolutionGraph,ResolutionGraph)
+    x_transmission=np.arange(min_wl,max_wl,ResolutionGraph)
     transmission=np.ones(x_transmission.shape)
     for i in range(numrows):
         transmission*=transmission_interpolations[i](x_transmission)**occurences[i]
@@ -104,6 +104,7 @@ class MainWindow(QtWidgets.QMainWindow):
         fig=plt.figure()
         ax=fig.add_subplot(111)
         ax.plot(x_transmission,transmission,'b-')
+        ax.set_xlim([np.float(self.lineEdit_plotAbsMin.text()),np.float(self.lineEdit_plotAbsMax.text())])
         plt.show()
              
     def clear_table(self):
