@@ -40,7 +40,7 @@ def return_data(dictionary, ref, dataset):
     f.close()
     return data[:,0], data[:,1]
 
-def calculate_transmission(tableWidget,source, ResolutionGraph):
+def calculate_transmission(tableWidget,source,sourcePower, ResolutionGraph):
     numrows = tableWidget.rowCount()
     min_wl=0
     max_wl=1e6
@@ -48,13 +48,13 @@ def calculate_transmission(tableWidget,source, ResolutionGraph):
     occurences=[]
     for i in range(numrows+1):
         if i<numrows:
-            occurence=int(tableWidget.item(i,2).text())
+            occurence=float(tableWidget.item(i,2).text())
             add_data=occurence!=0
             if add_data:
                 ref=tableWidget.item(i,0).text()
                 dataset=tableWidget.item(i,1).text()
                 dictionary=components_dictionary
-                y_scale=100
+                scaling=1
         else:
             add_data=source!='None'
             if add_data:
@@ -62,12 +62,12 @@ def calculate_transmission(tableWidget,source, ResolutionGraph):
                 ref=source
                 dataset=source
                 dictionary=sources_dictionary
-                y_scale=1
+                scaling=sourcePower
         if add_data:                    
             occurences+=[occurence]
             
             x,y=return_data(dictionary,ref,dataset)
-            interp=interp1d(x,y/y_scale)
+            interp=interp1d(x,y/100*scaling)
             
             min_wl=max(np.min(x),min_wl)
             max_wl=min(np.max(x),max_wl)
@@ -127,7 +127,9 @@ class MainWindow(QtWidgets.QMainWindow):
     def plot_transmission(self):
         tableWidget=self.tableWidget_components
         source=self.comboBox_sources.currentText()
-        x_transmission,transmission=calculate_transmission(tableWidget,source,np.float(self.lineEdit_ResolutionGraph.text()))
+        sourcePower=np.float(self.lineEdit_SourcePower.text())
+        graphResolution=np.float(self.lineEdit_GraphResolution.text())
+        x_transmission,transmission=calculate_transmission(tableWidget,source, sourcePower,graphResolution)
         
         fig=plt.figure()
         ax=fig.add_subplot(111)
@@ -140,52 +142,60 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tableWidget_components.setRowCount(0)
     
     def save(self):         
-         filename,extension = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Transmission', os.getcwd()+'/results/Transmission.h5', '*.h5')
-         if filename=='':
-             pass
-         else:
-             tableWidget=self.tableWidget_components
-             source=self.comboBox_sources.currentText()
+        filename,extension = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Transmission', os.getcwd()+'/results/Transmission.h5', '*.h5')
+        if filename=='':
+            pass
+        else:
+            tableWidget=self.tableWidget_components
+            source=self.comboBox_sources.currentText()
+            sourcePower=np.float(self.lineEdit_SourcePower.text())
+            graphResolution=np.float(self.lineEdit_GraphResolution.text())
+            x_transmission,transmission=calculate_transmission(tableWidget,source, sourcePower,graphResolution)
              
-             numrows=tableWidget.rowCount()
-             parameters=[[tableWidget.item(i,j).text() for j in range(3)] for i in range(numrows)]
-             parameters=np.array(parameters,dtype='S')
-             f=h5.File(filename,'w')
-             dset=f.create_dataset('Components', data=parameters)
-             dset.attrs['Source']=source
+                 
+            numrows=tableWidget.rowCount()
+            parameters=[[tableWidget.item(i,j).text() for j in range(3)] for i in range(numrows)]
+            parameters=np.array(parameters,dtype='S')
+            
+            f=h5.File(filename,'w')
+            dset=f.create_dataset('Components', data=parameters)
+            dset.attrs['Source']=source
              
-             x_transmission,transmission=calculate_transmission(tableWidget,source, np.float(self.lineEdit_ResolutionGraph.text()))
-             if source!='None':
-                 dset2=f.create_dataset('Spectral density',(len(x_transmission),2))
-                 dset2.attrs['Unit']='microW/nm'
-             else:
-                 dset2=f.create_dataset('Transmission',(len(x_transmission),2))
-             dset2[:,:]=np.vstack((x_transmission,transmission)).T
-             f.close()
+            if source!='None':
+                dset.attrs['UsefulPowerPercentage']=self.lineEdit_SourcePower.text()
+                dset2=f.create_dataset('Spectral density',(len(x_transmission),2))
+                dset2.attrs['Unit']='microW/nm'
+            else:
+                dset2=f.create_dataset('Transmission',(len(x_transmission),2))
+            dset2[:,:]=np.vstack((x_transmission,transmission)).T
+            f.close()
          
     def load(self):         
-         tableWidget=self.tableWidget_components
-         sources=self.comboBox_sources
+        tableWidget=self.tableWidget_components
+        sources=self.comboBox_sources
          
-         filename,extension = QtWidgets.QFileDialog.getOpenFileName(self, 'Load Transmission', os.getcwd()+'/results/', '*.h5')
-         if filename=='':
-             pass
-         else:
-             f=h5.File(filename,'r')
-             parameters=f['Components']
-             numrows=parameters.shape[0]
-             tableWidget.setRowCount(numrows)
-             for i in range(numrows):
-                 for j in range(3):
-                     tableWidget.setItem(i,j,QtWidgets.QTableWidgetItem(parameters[i,j].decode('utf-8')))
-             source=parameters.attrs['Source']
-             index_source = sources.findText(source, QtCore.Qt.MatchFixedString)
-             if index_source >= 0:
-                 sources.setCurrentIndex(index_source)
-             else:
-                 print('Source not available!')
-             f.close()
-             #tableWidget.horizontalHeader().setStretchLastSection(True)
+        filename,extension = QtWidgets.QFileDialog.getOpenFileName(self, 'Load Transmission', os.getcwd()+'/results/', '*.h5')
+        if filename=='':
+            pass
+        else:
+            f=h5.File(filename,'r')
+            parameters=f['Components']
+            numrows=parameters.shape[0]
+            tableWidget.setRowCount(numrows)
+            for i in range(numrows):
+                for j in range(3):
+                    tableWidget.setItem(i,j,QtWidgets.QTableWidgetItem(parameters[i,j].decode('utf-8')))
+            source=parameters.attrs['Source']
+            if source!='None':
+                power=parameters.attrs['UsefulPowerPercentage']
+                self.lineEdit_SourcePower.setText(power)
+            index_source = sources.findText(source, QtCore.Qt.MatchFixedString)
+            if index_source >= 0:
+                sources.setCurrentIndex(index_source)
+            else:
+                print('Source not available!')
+            f.close()
+            #tableWidget.horizontalHeader().setStretchLastSection(True)
          
          
              
