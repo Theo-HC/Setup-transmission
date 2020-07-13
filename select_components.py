@@ -80,6 +80,12 @@ def calculate_transmission(tableWidget,source,sourcePower, ResolutionGraph):
         transmission*=interp(x_transmission)**occurences[i]
     return x_transmission,transmission
 
+def fill_table(tableWidget,numrows, parameters):
+    tableWidget.setRowCount(numrows)
+    for i in range(numrows):
+        for j in range(3):
+            tableWidget.setItem(i,j,QtWidgets.QTableWidgetItem(parameters[i,j].decode('utf-8')))
+
 class MainWindow(QtWidgets.QMainWindow):
     
     def __init__(self, *args, **kwargs):
@@ -100,6 +106,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pushButton_addComponent.clicked.connect(self.add_components)
         self.pushButton_plot.clicked.connect(self.plot_transmission)
         self.pushButton_clearTable.clicked.connect(self.clear_table)
+        self.pushButton_clearTable_onlyZeros.clicked.connect(self.clear_table_emptyLines)
         self.pushButton_save.clicked.connect(self.save)
         self.pushButton_load.clicked.connect(self.load)
         
@@ -141,6 +148,14 @@ class MainWindow(QtWidgets.QMainWindow):
     def clear_table(self):
         self.tableWidget_components.setRowCount(0)
     
+    def clear_table_emptyLines(self):
+        tableWidget=self.tableWidget_components
+        numrows=tableWidget.rowCount()
+        parameters=[[tableWidget.item(i,j).text() for j in range(3)] for i in range(numrows) if np.float(tableWidget.item(i,2).text())!=0]
+        parameters=np.array(parameters,dtype='S')
+        numrows=len(parameters)
+        fill_table(tableWidget,numrows, parameters)
+        
     def save(self):         
         filename,extension = QtWidgets.QFileDialog.getSaveFileName(self, 'Save Transmission', os.getcwd()+'/results/Transmission.h5', '*.h5')
         if filename=='':
@@ -181,10 +196,7 @@ class MainWindow(QtWidgets.QMainWindow):
             f=h5.File(filename,'r')
             parameters=f['Components']
             numrows=parameters.shape[0]
-            tableWidget.setRowCount(numrows)
-            for i in range(numrows):
-                for j in range(3):
-                    tableWidget.setItem(i,j,QtWidgets.QTableWidgetItem(parameters[i,j].decode('utf-8')))
+            fill_table(tableWidget,numrows, parameters)
             source=parameters.attrs['Source']
             if source!='None':
                 power=parameters.attrs['UsefulPowerPercentage']
